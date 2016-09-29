@@ -15,12 +15,13 @@ class AutoCMSAppMixin(object):
         'namespace': None,
         'config_fields': {},
         'config_translated_fields': {},
-        'sites': True
+        'sites': True,
+        'in_navigation': True
     }
 
     @classmethod
     def _create_page(cls, page, lang, auto_title, cms_app=None, parent=None, namespace=None,
-                     site=None):
+                     site=None, in_navigation=True):
         """
         Create a single page or titles
 
@@ -44,6 +45,7 @@ class AutoCMSAppMixin(object):
             )
             page.application_urls = cms_app
             page.application_namespace = namespace
+            page.in_navigation = in_navigation
             page.save()
             page.publish(lang)
         elif lang not in page.get_languages():
@@ -143,7 +145,8 @@ class AutoCMSAppMixin(object):
                         )
                         app_page = cls._create_page(
                             app_page, lang, cls.auto_setup['page title'], cls.__name__, home,
-                            namespace, site=site
+                            namespace, site=site,
+                            in_navigation=cls.auto_setup['in_navigation']
                         )
                 if get_url:
                     TitleIndex.get_url = get_url
