@@ -146,7 +146,7 @@ class AutoCMSAppMixin(object):
                         app_page = cls._create_page(
                             app_page, lang, cls.auto_setup['page title'], cls.__name__, home,
                             namespace, site=site,
-                            in_navigation=cls.auto_setup['in_navigation']
+                            in_navigation=cls.auto_setup.get('in_navigation', True)
                         )
                 if get_url:
                     TitleIndex.get_url = get_url
