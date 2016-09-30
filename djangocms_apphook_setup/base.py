@@ -16,7 +16,9 @@ class AutoCMSAppMixin(object):
         'config_fields': {},
         'config_translated_fields': {},
         'sites': True,
-        'in_navigation': True
+        'in_navigation': True,
+        'plugin_options': {},
+        'slug': None,
     }
 
     @classmethod
@@ -38,7 +40,7 @@ class AutoCMSAppMixin(object):
 
     @classmethod
     def _create_page(cls, page, lang, auto_title, cms_app=None, parent=None, namespace=None,
-                     site=None, in_navigation=True):
+                     site=None, in_navigation=True, slug=None):
         """
         Create a single page or titles
 
@@ -58,7 +60,8 @@ class AutoCMSAppMixin(object):
         if page is None:
             page = create_page(
                 auto_title, language=lang, parent=parent, site=site,
-                template=default_template, in_navigation=True, published=True
+                template=default_template, in_navigation=True, published=True,
+                slug=slug
             )
             page.application_urls = cms_app
             page.application_namespace = namespace
@@ -175,9 +178,10 @@ class AutoCMSAppMixin(object):
                         elif setup_plugin:
                             app_page = cls._create_page(
                                 app_page, lang, cls.auto_setup['page title'],
-                                in_navigation=cls.auto_setup.get('in_navigation', True))
+                                in_navigation=cls.auto_setup.get('in_navigation', True),
+                                slug=cls.auto_setup.get('slug', None))
                             cls._add_plugin(app_page, lang, setup_plugin,
-                                            **cls.auto_setup.get('options', {}))
+                                            **cls.auto_setup.get('plugin_options', {}))
 
                 if get_url:
                     TitleIndex.get_url = get_url
