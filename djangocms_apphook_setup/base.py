@@ -20,6 +20,23 @@ class AutoCMSAppMixin(object):
     }
 
     @classmethod
+    def _add_plugin(cls, page, lang, plugin, **plugin_opts):
+        """
+        Add plugin to page
+
+        :param page: Page instance
+        :param lang: language code
+        :param plugin: plugin type
+        :param plugin_opts: plugin model options
+        """
+        from cms.api import add_plugin
+        from cms.models.placeholdermodel import Placeholder
+        if page is not None:
+            placeholder = Placeholder.objects.get(page=page)
+            add_plugin(placeholder, plugin, lang, **plugin_opts)
+            page.publish(lang)
+
+    @classmethod
     def _create_page(cls, page, lang, auto_title, cms_app=None, parent=None, namespace=None,
                      site=None, in_navigation=True):
         """
@@ -99,7 +116,7 @@ class AutoCMSAppMixin(object):
         :param setup_config: boolean to control whether creating the ApphookConfig instance
         """
         from cms.exceptions import NoHomeFound
-        from cms.models import Page
+        from cms.models import Page, Placeholder
         from cms.utils import get_language_list
         from django.conf import settings
         from django.utils.translation import override
@@ -116,6 +133,9 @@ class AutoCMSAppMixin(object):
             TitleIndex.get_url = fake_url
         site = Site.objects.get_current()
         auto_sites = cls.auto_setup.get('sites', True)
+        setup_apphook = cls.__name__ if hasattr(cls, 'app_name') else None
+        setup_plugin = cls.__name__ if hasattr(cls, 'render_plugin') \
+            and cls.render_plugin else None
         if auto_sites is True or site.pk in auto_sites:
             if getattr(cls, 'app_config', False):
                 configs = cls.app_config.objects.all()
@@ -125,14 +145,17 @@ class AutoCMSAppMixin(object):
                     config = configs.first()
 
             langs = get_language_list(site.pk)
-            if not Page.objects.on_site(site.pk).filter(application_urls=cls.__name__).exists():
+            if setup_apphook and \
+                not Page.objects.on_site(site.pk).filter(application_urls=setup_apphook).exists() or \
+                setup_plugin and \
+                    not Placeholder.objects.filter(cmsplugin__plugin_type=setup_plugin).exists():
                 for lang in langs:
                     with override(lang):
                         if config:
                             if cls.auto_setup['config_translated_fields']:
                                 cls._create_config_translation(config, lang)
                             namespace = config.namespace
-                        elif cls.app_name:
+                        elif setup_apphook and cls.app_name:
                             namespace = cls.app_name
                         else:
                             namespace = None
@@ -143,41 +166,56 @@ class AutoCMSAppMixin(object):
                         home = cls._create_page(
                             home, lang, cls.auto_setup['home title'], site=site
                         )
-                        app_page = cls._create_page(
-                            app_page, lang, cls.auto_setup['page title'], cls.__name__, home,
-                            namespace, site=site,
-                            in_navigation=cls.auto_setup.get('in_navigation', True)
-                        )
+                        if setup_apphook:
+                            app_page = cls._create_page(
+                                app_page, lang, cls.auto_setup['page title'],
+                                setup_apphook, home, namespace, site=site,
+                                in_navigation=cls.auto_setup.get('in_navigation', True)
+                            )
+                        elif setup_plugin:
+                            app_page = cls._create_page(
+                                app_page, lang, cls.auto_setup['page title'],
+                                in_navigation=cls.auto_setup.get('in_navigation', True))
+                            cls._add_plugin(app_page, lang, setup_plugin,
+                                            **cls.auto_setup.get('options', {}))
+
                 if get_url:
                     TitleIndex.get_url = get_url
 
     @classmethod
     def setup(cls):
         """
-        Main method to auto setup Apphook
+        Main method to auto setup Apphook/Plugin
 
-        It must be called after the Apphook registration::
+        It must be called after the Apphook/Plugin registration::
 
             apphook_pool.register(MyApp)
             MyApp.setup()
+
+            plugin_pool.register_plugin(MyPlugin)
+            MyPlugin.setup()
         """
         try:
             if cls.auto_setup and cls.auto_setup.get('enabled', False):
-                if not cls.auto_setup.get('home title', False):
-                    warnings.warn(
-                        '"home title" is not set in {0}.auto_setup attribute'.format(cls)
-                    )
-                    return
                 if not cls.auto_setup.get('page title', False):
                     warnings.warn(
                         '"page title" is not set in {0}.auto_setup attribute'.format(cls)
                     )
                     return
-                if cls.app_name and not cls.auto_setup.get('namespace', False):
-                    warnings.warn(
-                        '"page title" is not set in {0}.auto_setup attribute'.format(cls)
-                    )
-                    return
+                if hasattr(cls, 'app_name'):
+                    # must be an apphook
+                    if cls.app_name and \
+                        not cls.auto_setup.get('namespace', False):
+                        warnings.warn(
+                            '"page title" is not set in {0}.auto_setup attribute'.format(cls)
+                        )
+                        return
+                    if not cls.auto_setup.get('home title', False):
+                        warnings.warn(
+                                '"home title" is not set in {0}.auto_setup attribute'.format(cls)
+                        )
+                        return
+
                 config = None
                 cls._setup_pages(config)
         except Exception:
